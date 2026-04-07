@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, system-ui, sans-serif;
+  background-color: #f0fdf4;
+  color: #1a1a1a;
+}
+
+/* ドロップゾーンのアニメーション */
+@keyframes pulse-border {
+  0%, 100% { border-color: #10b981; }
+  50%       { border-color: #059669; }
+}
+.drop-active {
+  animation: pulse-border 1s ease-in-out infinite;
+  background-color: #ecfdf5;
+}
+
+/* Markdownプレビューのスクロールバー */
+.preview-area::-webkit-scrollbar { width: 6px; }
+.preview-area::-webkit-scrollbar-track { background: #f1f5f9; }
+.preview-area::-webkit-scrollbar-thumb { background: #a7f3d0; border-radius: 3px; }

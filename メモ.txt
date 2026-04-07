@@ -1,0 +1,30 @@
+# Amazon S3 バケット名
+excel2md-input-horiuchi-20260406
+excel2md-output-horiuchi-20260406
+
+# 関数ARN
+arn:aws:lambda:ap-northeast-1:091423120124:function:excel2md
+
+# API Gateway URL（VITE_API_ENDPOINT）
+https://vlzkitdbjj.execute-api.ap-northeast-1.amazonaws.com/prod
+
+# 関数 URL（VITE_LAMBDA_FUNCTION_URL）
+https://wlho3mvqirgzxhi5qh6dwdt3k40qytwx.lambda-url.ap-northeast-1.on.aws
+
+# Lambdaデプロイ
+cd C:\Users\t-horiuchi\excel2md\lambda
+
+Remove-Item -Recurse -Force package -ErrorAction SilentlyContinue
+
+$py="$env:LocalAppData\Programs\Python\Python312\python.exe"
+& $py -m pip install -r "C:\Users\t-horiuchi\excel2md\lambda\requirements.txt" -t "C:\Users\t-horiuchi\excel2md\lambda\package"
+
+Copy-Item lambda_function.py package\
+
+Compress-Archive -Path package\* -DestinationPath excel2md.zip -Force
+
+# フロント起動
+cd C:\Users\t-horiuchi\excel2md\frontend
+
+$nodeDir="$env:LOCALAPPDATA\nodejs\node-v24.14.1-win-x64"; $env:Path="$nodeDir;$env:Path"
+& "$nodeDir\npm.cmd" run dev
