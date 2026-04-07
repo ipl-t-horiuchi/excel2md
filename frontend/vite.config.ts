@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    base: '/excel2md/',
     server: apiBase
       ? {
           proxy: {
