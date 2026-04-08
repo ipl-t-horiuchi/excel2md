@@ -35,6 +35,14 @@ export default function SheetTable({
     wasDisabledRef.current = disabled
   }, [disabled])
 
+  useEffect(() => {
+    // 出力対象から外れたシートは AI 再変換の選択からも外す
+    setAiSelected((prev) => {
+      const next = new Set([...prev].filter((name) => outputSelected.has(name)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [outputSelected])
+
   const filteredNames = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return sheetNames
@@ -49,8 +57,9 @@ export default function SheetTable({
     })
 
   const handleAiConvert = () => {
-    if (aiSelected.size === 0) return
-    onReconvert([...aiSelected])
+    const targetNames = [...aiSelected].filter((name) => outputSelected.has(name))
+    if (targetNames.length === 0) return
+    onReconvert(targetNames)
   }
 
   return (
@@ -68,7 +77,7 @@ export default function SheetTable({
       </div>
 
       <p className="mb-3 text-xs text-gray-500">
-        「出力」はダウンロード・プレビュー対象です。「AI」は任意で、複雑な表向けに再変換します。
+        「出力」はダウンロード・プレビュー対象です。「AI」は出力対象のシートのみ再変換できます。
       </p>
 
       <div className="overflow-x-auto rounded-lg border border-gray-100">
@@ -118,7 +127,7 @@ export default function SheetTable({
                       type="checkbox"
                       checked={aiSelected.has(name)}
                       onChange={() => toggleAi(name)}
-                      disabled={disabled}
+                      disabled={disabled || !outputSelected.has(name)}
                       className="h-4 w-4 rounded accent-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
                       aria-label={`${name} を AI で再変換`}
                     />
