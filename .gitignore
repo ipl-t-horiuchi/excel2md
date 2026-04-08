@@ -1,0 +1,12 @@
+output.md
+output_step3.md
+output_step4.md
+メモ.txt
+excel2md.code-workspace
+frontend/.env
+frontend/.env.bak
+frontend/dist/
+frontend/node_modules/
+lambda/excel2md.zip
+index.html
+assets/icons/
