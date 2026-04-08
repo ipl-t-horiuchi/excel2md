@@ -4,6 +4,7 @@ export const API_BASE = typeof rawBase === 'string' ? rawBase.replace(/\/+$/, ''
 export const PRESIGN_URL           = import.meta.env.DEV ? '/presign'          : `${API_BASE}/presign`
 export const RECONVERT_URL         = import.meta.env.DEV ? '/reconvert'        : `${API_BASE}/reconvert`
 export const RECONVERT_STATUS_URL  = import.meta.env.DEV ? '/reconvert-status' : `${API_BASE}/reconvert-status`
+export const RECONVERT_CANCEL_URL  = import.meta.env.DEV ? '/reconvert-cancel' : `${API_BASE}/reconvert-cancel`
 
 export function assertBackendConfigured(): void {
   if (!API_BASE) {

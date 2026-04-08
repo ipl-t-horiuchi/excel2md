@@ -32,6 +32,14 @@ interface SubTable {
 const escapeCell = (s: unknown): string =>
   String(s ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ')
 
+/** 表セル用: 改行は Markdown 表で行を壊さないよう HTML の改行にする（GFM と整合） */
+const escapeTableCell = (s: unknown): string =>
+  String(s ?? '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\|/g, '\\|')
+    .replace(/\n/g, '<br>')
+
 const trimEmptyColumns = (grid: string[][]): string[][] => {
   if (grid.length === 0) return grid
   const colCount = grid[0].length
@@ -257,9 +265,15 @@ export function convertXlsxToMarkdown(buffer: ArrayBuffer, _fileName?: string): 
     const mdParts: string[] = []
     mdParts.push(`# ${sheetName}\n`)
 
+    /** シート名と同一の見出しは # で既に出しているため ## を省略 */
+    const isDuplicateOfSheetTitle = (t: string) =>
+      String(t).trim() === String(sheetName).trim()
+
     for (const block of blocks) {
       const blockTitle = block.title || null
-      if (blockTitle) mdParts.push(`## ${escapeCell(blockTitle)}\n\n`)
+      if (blockTitle && !isDuplicateOfSheetTitle(blockTitle)) {
+        mdParts.push(`## ${escapeCell(blockTitle)}\n\n`)
+      }
 
       if (isTableBlock(block)) {
         for (const { titleRow, bodyRows } of splitToSubTables(block.rows)) {
@@ -267,7 +281,9 @@ export function convertXlsxToMarkdown(buffer: ArrayBuffer, _fileName?: string): 
             const titleVal = titleRow
               ? String(titleRow.cells.find(c => c.val !== '')?.val ?? '').trim()
               : null
-            if (titleVal) mdParts.push(`## ${escapeCell(titleVal)}\n\n`)
+            if (titleVal && !isDuplicateOfSheetTitle(titleVal)) {
+              mdParts.push(`## ${escapeCell(titleVal)}\n\n`)
+            }
           }
 
           if (bodyRows.length === 0) continue
@@ -308,7 +324,7 @@ export function convertXlsxToMarkdown(buffer: ArrayBuffer, _fileName?: string): 
           trimmed = trimColumnsWithEmptyHeader(trimmed)
 
           if (trimmed.length > 0 && trimmed[0].length > 0) {
-            const lines = trimmed.map(row => '| ' + row.map(c => escapeCell(c)).join(' | ') + ' |')
+            const lines = trimmed.map(row => '| ' + row.map(c => escapeTableCell(c)).join(' | ') + ' |')
             const sep = '| ' + trimmed[0].map(() => '---').join(' | ') + ' |'
             mdParts.push(lines[0] + '\n' + sep + '\n' + lines.slice(1).join('\n') + '\n')
           }
@@ -320,7 +336,9 @@ export function convertXlsxToMarkdown(buffer: ArrayBuffer, _fileName?: string): 
         }
       } else {
         const { sectionTitle, pairs } = blockToKeyValueList(block)
-        if (!blockTitle && sectionTitle) mdParts.push(`## ${escapeCell(sectionTitle)}\n\n`)
+        if (!blockTitle && sectionTitle && !isDuplicateOfSheetTitle(sectionTitle)) {
+          mdParts.push(`## ${escapeCell(sectionTitle)}\n\n`)
+        }
         for (const { k, v } of pairs) mdParts.push(`- **${escapeCell(k)}**: ${escapeCell(v)}\n`)
         mdParts.push('\n')
       }

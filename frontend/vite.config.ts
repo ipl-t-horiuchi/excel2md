@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => {
             '/presign':          { target: apiBase, changeOrigin: true, secure: true },
             '/status':           { target: apiBase, changeOrigin: true, secure: true },
             '/reconvert-status': { target: apiBase, changeOrigin: true, secure: true },
+            '/reconvert-cancel': { target: apiBase, changeOrigin: true, secure: true },
             '/reconvert':        { target: apiBase, changeOrigin: true, secure: true },
           },
         }

@@ -9,7 +9,6 @@ import base64
 import os
 import tempfile
 from urllib.parse import unquote_plus
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import uuid as uuid_module
 
 
@@ -48,7 +47,7 @@ def lambda_handler(event, context):
         return _route_api(event, method)
     if "Records" in event:
         return _handle_s3_event(event)
-    return {"statusCode": 400, "body": json.dumps({"error": "Unknown event type"})}
+    return {"statusCode": 400, "body": json.dumps({"error": "不明なイベント種別です"})}
 
 
 def _route_api(event, method):
@@ -59,13 +58,15 @@ def _route_api(event, method):
 
     if "/presign" in path and method == "POST":
         return _handle_presign()
-    # /reconvert-status を /reconvert より先にチェック
+    # 「/reconvert」は /reconvert-cancel にもマッチするため、先に長いパスを判定する
+    if "/reconvert-cancel" in path and method == "POST":
+        return _handle_reconvert_cancel(event)
     if "/reconvert-status" in path and method == "GET":
         return _handle_reconvert_status(event)
     if "/reconvert" in path and method == "POST":
         return _handle_reconvert_api(event)
 
-    return _cors(404, {"error": "Not found"})
+    return _cors(404, {"error": "見つかりません"})
 
 
 # ─────────────────────────────────────────────
@@ -102,11 +103,11 @@ def _handle_reconvert_api(event):
         body = _parse_json_body(event)
     except json.JSONDecodeError as e:
         print(f"reconvert JSON parse error: {e} body_preview={repr((event.get('body') or '')[:200])}")
-        return _cors(400, {"error": "Invalid JSON body"})
+        return _cors(400, {"error": "JSON 本文が不正です"})
     job_id = body.get("jobId", "").strip()
     sheet_names = body.get("sheetNames") or []
     if not job_id or not sheet_names:
-        return _cors(400, {"error": "jobId and sheetNames are required"})
+        return _cors(400, {"error": "jobId と sheetNames が必要です"})
 
     reconvert_id = str(uuid_module.uuid4())
     output_bucket = os.environ["OUTPUT_BUCKET"]
@@ -136,6 +137,58 @@ def _handle_reconvert_api(event):
 
 
 # ─────────────────────────────────────────────
+# API: POST /reconvert-cancel
+#   { reconvertId } → S3 にキャンセルマーカーを置き、ワーカーが検知して停止する
+# ─────────────────────────────────────────────
+
+def _reconvert_cancel_key(reconvert_id: str) -> str:
+    return f"jobs/{reconvert_id}.reconvert.cancel"
+
+
+def _handle_reconvert_cancel(event):
+    try:
+        body = _parse_json_body(event)
+    except json.JSONDecodeError:
+        return _cors(400, {"error": "JSON 本文が不正です"})
+    reconvert_id = (body.get("reconvertId") or "").strip()
+    if not reconvert_id:
+        return _cors(400, {"error": "reconvertId が必要です"})
+    output_bucket = os.environ["OUTPUT_BUCKET"]
+    s3 = boto3.client("s3")
+    s3.put_object(
+        Bucket=output_bucket,
+        Key=_reconvert_cancel_key(reconvert_id),
+        Body=b"",
+        ContentType="application/octet-stream",
+    )
+    print(f"Reconvert cancel requested: reconvertId={reconvert_id}")
+    return _cors(200, {"ok": True})
+
+
+def _is_reconvert_cancel_requested(s3, output_bucket: str, reconvert_id: str) -> bool:
+    try:
+        s3.head_object(Bucket=output_bucket, Key=_reconvert_cancel_key(reconvert_id))
+        return True
+    except ClientError as e:
+        code = e.response.get("Error", {}).get("Code", "")
+        if code in ("404", "NoSuchKey", "NotFound"):
+            return False
+        raise
+
+
+def _cleanup_reconvert_cancelled(s3, input_bucket: str, output_bucket: str, job_id: str, reconvert_id: str):
+    """キャンセル確定時: 処理中マーカー削除・入力 xlsx 削除（キャンセルマーカーは残す）"""
+    try:
+        s3.delete_object(Bucket=output_bucket, Key=f"jobs/{reconvert_id}.reconvert.processing")
+    except Exception:
+        pass
+    try:
+        s3.delete_object(Bucket=input_bucket, Key=f"jobs/{job_id}.xlsx")
+    except Exception:
+        pass
+
+
+# ─────────────────────────────────────────────
 # API: GET /reconvert-status?reconvertId=xxx
 # ─────────────────────────────────────────────
 
@@ -144,7 +197,7 @@ def _handle_reconvert_status(event):
     params = event.get("queryStringParameters") or {}
     reconvert_id = params.get("reconvertId", "").strip()
     if not reconvert_id:
-        return _cors(400, {"error": "reconvertId is required"})
+        return _cors(400, {"error": "reconvertId が必要です"})
 
     output_bucket = os.environ["OUTPUT_BUCKET"]
     json_key = f"jobs/{reconvert_id}.reconvert.json"
@@ -164,6 +217,12 @@ def _handle_reconvert_status(event):
             ExpiresIn=3600,
         )
         return _cors(200, {"status": "done", "downloadUrl": download_url})
+    except Exception:
+        pass
+
+    try:
+        s3.head_object(Bucket=output_bucket, Key=_reconvert_cancel_key(reconvert_id))
+        return _cors(200, {"status": "cancelled"})
     except Exception:
         pass
 
@@ -193,13 +252,25 @@ def _do_reconvert(event):
         excel_path = tmp.name
 
     try:
+        if _is_reconvert_cancel_requested(s3, output_bucket, reconvert_id):
+            _cleanup_reconvert_cancelled(s3, input_bucket, output_bucket, job_id, reconvert_id)
+            print(f"[reconvert] cancelled before download reconvertId={reconvert_id}")
+            return {"statusCode": 200}
+
         try:
             s3.download_file(input_bucket, xlsx_key, excel_path)
         except ClientError as e:
             code = e.response.get("Error", {}).get("Code", "")
             if code in ("404", "NoSuchKey", "NotFound"):
-                raise RuntimeError(f"xlsx not found in input bucket: s3://{input_bucket}/{xlsx_key}") from e
+                raise RuntimeError(
+                    f"入力バケットに xlsx が見つかりません: s3://{input_bucket}/{xlsx_key}"
+                ) from e
             raise
+
+        if _is_reconvert_cancel_requested(s3, output_bucket, reconvert_id):
+            _cleanup_reconvert_cancelled(s3, input_bucket, output_bucket, job_id, reconvert_id)
+            print(f"[reconvert] cancelled after download reconvertId={reconvert_id}")
+            return {"statusCode": 200}
 
         print(f"[reconvert] xlsx downloaded in {time.perf_counter() - t0:.2f}s")
         wb = openpyxl.load_workbook(excel_path, data_only=True)
@@ -210,20 +281,24 @@ def _do_reconvert(event):
             if name in wb.sheetnames
         ]
 
+        # キャンセル検知のためシートは順次処理（並列だと未投入分を止めにくい）
         results: dict[str, str] = {}
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            future_map = {
-                executor.submit(_call_bedrock_claude, data, name): name
-                for name, data in to_convert
-            }
-            for future in as_completed(future_map):
-                name = future_map[future]
-                try:
-                    results[name] = future.result()
-                    print(f"[reconvert] Bedrock done: sheet='{name}' in {time.perf_counter() - t0:.2f}s")
-                except Exception as e:
-                    results[name] = f"（AI変換エラー: {e}）"
-                    print(f"[reconvert] Bedrock error: sheet='{name}' {e}")
+        for name, data in to_convert:
+            if _is_reconvert_cancel_requested(s3, output_bucket, reconvert_id):
+                print(f"[reconvert] cancelled before sheet={name!r} reconvertId={reconvert_id}")
+                _cleanup_reconvert_cancelled(s3, input_bucket, output_bucket, job_id, reconvert_id)
+                return {"statusCode": 200}
+            try:
+                results[name] = _call_bedrock_claude(data, name)
+                print(f"[reconvert] Bedrock done: sheet='{name}' in {time.perf_counter() - t0:.2f}s")
+            except Exception as e:
+                results[name] = f"（AI変換エラー: {e}）"
+                print(f"[reconvert] Bedrock error: sheet='{name}' {e}")
+
+        if _is_reconvert_cancel_requested(s3, output_bucket, reconvert_id):
+            _cleanup_reconvert_cancelled(s3, input_bucket, output_bucket, job_id, reconvert_id)
+            print(f"[reconvert] cancelled after sheets reconvertId={reconvert_id}")
+            return {"statusCode": 200}
 
         # 結果を JSON で保存
         sheets_json = [
