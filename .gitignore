@@ -10,5 +10,6 @@ frontend/node_modules/
 lambda/excel2md.zip
 index.html
 assets/icons/
+lambda/package/
 lambda/package/**/__pycache__/
 lambda/package/**/*.pyc
