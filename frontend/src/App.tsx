@@ -282,7 +282,7 @@ export default function App() {
         <p className="text-sm text-gray-600">
           <code className="rounded bg-gray-100 px-1 text-xs">.xlsx</code>{' '}
           ファイルを選択するとブラウザで即座に Markdown へ変換します。
-          精度を上げたいシートは AIで再変換できます。
+          精度を上げたいシートは AIで再変換できます（現在準備中）。
         </p>
 
         <FileDropzone

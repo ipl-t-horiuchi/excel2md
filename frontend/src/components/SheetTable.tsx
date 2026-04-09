@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+/** AI再変換機能の有効フラグ。社内確認後に true へ戻す */
+const AI_FEATURE_ENABLED = false
+
 interface Props {
   sheetNames: string[]
   outputSelected: Set<string>
@@ -90,7 +93,7 @@ export default function SheetTable({
               <th scope="col" className="w-24 px-2 py-2 text-center">
                 出力
               </th>
-              <th scope="col" className="w-28 px-2 py-2 text-center text-amber-800">
+              <th scope="col" className="w-28 px-2 py-2 text-center text-gray-400">
                 AI 再変換
               </th>
             </tr>
@@ -127,7 +130,7 @@ export default function SheetTable({
                       type="checkbox"
                       checked={aiSelected.has(name)}
                       onChange={() => toggleAi(name)}
-                      disabled={disabled || !outputSelected.has(name)}
+                      disabled={!AI_FEATURE_ENABLED || disabled || !outputSelected.has(name)}
                       className="h-4 w-4 rounded accent-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
                       aria-label={`${name} を AI で再変換`}
                     />
@@ -157,34 +160,45 @@ export default function SheetTable({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-amber-100 pt-4">
-        <button
-          type="button"
-          onClick={handleAiConvert}
-          disabled={disabled || aiSelected.size === 0}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-        >
-          {disabled ? (
-            <>
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              AI 変換中…
-            </>
-          ) : (
-            <>
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              選択シートを AI 変換（{aiSelected.size} シート）
-            </>
-          )}
-        </button>
-        {disabled && onCancelReconvert && (
-          <button
-            type="button"
-            onClick={onCancelReconvert}
-            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 sm:w-auto"
-          >
-            キャンセル
-          </button>
+        {AI_FEATURE_ENABLED ? (
+          <>
+            <button
+              type="button"
+              onClick={handleAiConvert}
+              disabled={disabled || aiSelected.size === 0}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              {disabled ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  AI 変換中…
+                </>
+              ) : (
+                <>
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  選択シートを AI 変換（{aiSelected.size} シート）
+                </>
+              )}
+            </button>
+            {disabled && onCancelReconvert && (
+              <button
+                type="button"
+                onClick={onCancelReconvert}
+                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 sm:w-auto"
+              >
+                キャンセル
+              </button>
+            )}
+          </>
+        ) : (
+          <div className="flex w-full items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-400 sm:w-auto">
+            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            AI 再変換は現在ご利用いただけません（準備中）
+          </div>
         )}
       </div>
     </div>

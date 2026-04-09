@@ -1,14 +1,10 @@
-output.md
-output_step3.md
-output_step4.md
-メモ.txt
 excel2md.code-workspace
+work/
 frontend/.env
 frontend/.env.bak
 frontend/dist/
 frontend/node_modules/
 lambda/excel2md.zip
-index.html
 assets/icons/
 lambda/package/
 lambda/package/**/__pycache__/
